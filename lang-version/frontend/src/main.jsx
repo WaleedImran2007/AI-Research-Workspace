@@ -8,7 +8,7 @@ import { AuthProvider } from '../Context/AuthContext.jsx';
 
 // COMPONENTS
 import Home from './pages/Home.jsx';
-import SignUp from './pages/Signup.jsx';
+import SignUp from './pages/SignUp.jsx';
 import Login from './pages/Login.jsx';
 import Collections from './pages/Collections.jsx';
 import CollectionDetails from './pages/CollectionDetails.jsx';
