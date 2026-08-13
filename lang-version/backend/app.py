@@ -1,3 +1,5 @@
+print("🔥 APP.PY STARTING")
+
 from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
@@ -11,7 +13,11 @@ from routers.documentRouter import router as document_router
 from routers.chatRouter import router as chat_router
 from routers.conversationRouter import router as conversation_router
 
+import os
+
 app = FastAPI()
+
+os.makedirs("generated", exist_ok=True)
 
 app.mount(
     "/generated",
@@ -21,6 +27,7 @@ app.mount(
 
 origins = [
     "http://localhost:5173",
+    "https://airw.waleedimran.me"
 ]
 
 app.add_middleware(
