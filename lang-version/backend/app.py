@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from routers.authRouter import router as auth_router
 from routers.collectionRouter import router as collection_router
-from routers.documentRouter import router as documet_router
+from routers.documentRouter import router as document_router
 from routers.chatRouter import router as chat_router
 from routers.conversationRouter import router as conversation_router
 
@@ -44,7 +44,7 @@ app.include_router(
 )
 
 app.include_router(
-    documet_router,
+    document_router,
     prefix="/documents",
     tags=["Documents"]
 )

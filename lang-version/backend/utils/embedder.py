@@ -5,6 +5,8 @@ model = None
 def get_model():
     global model
 
+    print("🔥 get_model() CALLED")
+
     if model is None:
         print("Loading Embedding Model...")
 

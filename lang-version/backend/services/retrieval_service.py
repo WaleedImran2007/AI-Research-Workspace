@@ -1,8 +1,8 @@
-from utils.vector_store import vector_store
+from utils.vector_store import get_vector_store
 
 # from services.keyword_search import keyword_search
 from services.bm25_search import get_bm25_retriever
-from services.reranker import reranker
+from services.reranker import get_reranker
 
 from schemas.filter import FilterSchema
 
@@ -23,7 +23,7 @@ def search_chunks(filters: FilterSchema, owner_id: str):
         vector_filter["page"] = {"$in": filters.pages}
 
     # Perform vector search
-    vector_retriever = vector_store.as_retriever(
+    vector_retriever = get_vector_store().as_retriever(
         search_kwargs={
             "k": TOP_K,
             "pre_filter": vector_filter
@@ -47,7 +47,7 @@ def search_chunks(filters: FilterSchema, owner_id: str):
     # Use a ContextualCompressionRetriever to compress the retrieved documents
 
     compression_retriever = ContextualCompressionRetriever(
-        base_compressor = reranker,
+        base_compressor = get_reranker(),
         base_retriever = base_retriever
     )
 
