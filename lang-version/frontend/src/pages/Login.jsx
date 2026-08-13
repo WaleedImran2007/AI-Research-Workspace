@@ -4,6 +4,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { LogIn, Sparkles } from "lucide-react";
 
+import api from "../../api/api.js";
+
 import { useAuth } from "../../Context/AuthContext.jsx";
 
 function Login() {
@@ -26,7 +28,7 @@ function Login() {
         e.preventDefault();
 
         try {
-            const response = await axios.post("http://localhost:8000/auth/login", formData);
+            const response = await api.post("/auth/login", formData);
 
             login(response.data.user, response.data.token);
 

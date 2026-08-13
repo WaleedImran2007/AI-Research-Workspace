@@ -4,6 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from 'axios';
 import { Sparkles, UserPlus } from "lucide-react";
 
+import api from "../../api/api.js";
+
 function Signup() {
     const navigate = useNavigate();
 
@@ -30,7 +32,7 @@ function Signup() {
         }
 
         try {
-            const response = await axios.post('http://localhost:8000/auth/signup', {
+            const response = await api.post("/auth/signup", {
                 username: formData.username,
                 email: formData.email,
                 password: formData.password,
