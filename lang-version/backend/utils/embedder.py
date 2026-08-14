@@ -10,8 +10,16 @@ def get_model():
     if model is None:
         print("Loading Embedding Model...")
 
+        # Limit torch's internal thread pool - reduces resident memory used
+        # by the BLAS/OMP threads without changing embedding output.
+        import torch
+        torch.set_num_threads(1)
+
         model = HuggingFaceEmbeddings(
             model_name="BAAI/bge-small-en-v1.5",
+            model_kwargs={
+                "device": "cpu"
+            },
             encode_kwargs={
                 "normalize_embeddings": True
             }

@@ -9,8 +9,16 @@ def get_reranker():
     if reranker is None:
         print("Loading Reranker Model...")
 
+        # Limit torch's internal thread pool - reduces resident memory used
+        # by the BLAS/OMP threads without changing reranking output.
+        import torch
+        torch.set_num_threads(1)
+
         model = HuggingFaceCrossEncoder(
-            model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"
+            model_name="cross-encoder/ms-marco-MiniLM-L-6-v2",
+            model_kwargs={
+                "device": "cpu"
+            }
         )
 
         reranker = CrossEncoderReranker(

@@ -1,10 +1,24 @@
+import os
+
+from collections import OrderedDict
+
 from database import knowledge_chunks_collection
 from utils.keywords import extract_keywords
 
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 
-bm25_cache = {}
+# Each cached retriever holds the full text corpus for an owner/collection
+# in memory. Left unbounded, this cache grows forever as more distinct
+# owner/collection combinations are queried over the app's lifetime, which
+# is a common cause of memory slowly climbing until the process gets OOM
+# killed. We bound it to a max number of entries and evict the least
+# recently used one once the limit is reached. Behavior/results returned by
+# get_bm25_retriever are unchanged - only how long a built index stays
+# cached differs.
+BM25_CACHE_MAX_SIZE = int(os.environ.get("BM25_CACHE_MAX_SIZE", "20"))
+
+bm25_cache: "OrderedDict" = OrderedDict()
 
 def clear_bm25_cache(owner_id: str, collection_ids: list[str] | None = None):
     keys_to_remove = []
@@ -39,6 +53,9 @@ def get_bm25_retriever(owner_id: str, collection_ids: list[str] | None, k: int =
 
         retriever = bm25_cache[cache_key]
         retriever.k = k
+
+        # mark as most-recently-used
+        bm25_cache.move_to_end(cache_key)
 
         return retriever
 
@@ -76,7 +93,11 @@ def get_bm25_retriever(owner_id: str, collection_ids: list[str] | None, k: int =
 
     bm25_retriever.k = k
 
-    # save in cache
+    # save in cache, evicting the oldest/least-recently-used entry if we're at capacity
+    if len(bm25_cache) >= BM25_CACHE_MAX_SIZE:
+        evicted_key, _ = bm25_cache.popitem(last=False)
+        print(f"BM25 cache full, evicted least-recently-used entry: {evicted_key}")
+
     bm25_cache[cache_key] = bm25_retriever
 
     return bm25_retriever

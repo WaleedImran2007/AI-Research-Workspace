@@ -1,5 +1,18 @@
 print("🔥 APP.PY STARTING")
 
+import os
+
+# Must be set before torch/transformers/tokenizers get imported anywhere
+# (they're imported lazily by utils/embedder.py and services/reranker.py on
+# first use). Limiting thread counts meaningfully cuts the memory overhead
+# of the BLAS/OMP thread pools and avoids tokenizers forking extra worker
+# processes - important on memory-constrained hosts like small Render
+# instances. This doesn't change any request/response behavior.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+
 from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
@@ -13,7 +26,6 @@ from routers.documentRouter import router as document_router
 from routers.chatRouter import router as chat_router
 from routers.conversationRouter import router as conversation_router
 
-import os
 
 app = FastAPI()
 
