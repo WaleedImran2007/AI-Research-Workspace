@@ -1,40 +1,33 @@
-from langchain_huggingface import HuggingFaceEmbeddings
+import os
 
-model = None
+from dotenv import load_dotenv
+from huggingface_hub import InferenceClient
 
-def get_model():
-    global model
+load_dotenv()
 
-    print("🔥 get_model() CALLED")
+client = InferenceClient(
+    token = os.getenv("HF_TOKEN")
+)
 
-    if model is None:
-        print("Loading Embedding Model...")
-
-        # Limit torch's internal thread pool - reduces resident memory used
-        # by the BLAS/OMP threads without changing embedding output.
-        import torch
-        torch.set_num_threads(1)
-
-        model = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-small-en-v1.5",
-            model_kwargs={
-                "device": "cpu"
-            },
-            encode_kwargs={
-                "normalize_embeddings": True
-            }
-        )
-
-        print("Embedding Model Loaded!")
-
-    return model
-
+MODEL_NAME = "BAAI/bge-small-en-v1.5"
 
 def create_embeddings(texts: list[str]) -> list[list]:
-    model = get_model()
-    return model.embed_documents(texts)
+    if not texts:
+        return []
+
+    embeddings = client.feature_extraction(
+        texts,
+        model=MODEL_NAME,
+    )
+
+    return [embedding.tolist() for embedding in embeddings]
 
 
 def create_embedding(text: str) -> list:
-    model = get_model()
-    return model.embed_query(text)
+    if not text.strip():
+        return []
+
+    return client.feature_extraction(
+        text,
+        model=MODEL_NAME,
+    ).tolist()

@@ -1,7 +1,14 @@
 from langchain_mongodb import MongoDBAtlasVectorSearch
 
 from database import knowledge_chunks_collection
-from utils.embedder import get_model
+from utils.embedder import create_embedding, create_embeddings
+
+class HuggingFaceAPIEmbedding:
+    def embed_query(self, text: str) -> list[float]:
+        return create_embedding(text)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return create_embeddings(texts)
 
 vector_store = None
 
@@ -9,7 +16,7 @@ def get_vector_store():
     global vector_store
 
     if vector_store is None:
-        embeddings = get_model()
+        embeddings = HuggingFaceAPIEmbedding()
 
         vector_store = MongoDBAtlasVectorSearch(
             collection=knowledge_chunks_collection,
