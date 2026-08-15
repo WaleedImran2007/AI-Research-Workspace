@@ -1,6 +1,6 @@
-import pandas as pd
-
 def get_csv_schema(path: str):
+    import pandas as pd
+
     df = pd.read_csv(path, nrows=5)
 
     return {
