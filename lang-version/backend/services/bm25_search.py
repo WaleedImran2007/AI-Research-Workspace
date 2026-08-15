@@ -1,5 +1,4 @@
 import os
-
 from collections import OrderedDict
 
 from database import knowledge_chunks_collection
@@ -16,20 +15,27 @@ from langchain_core.documents import Document
 # recently used one once the limit is reached. Behavior/results returned by
 # get_bm25_retriever are unchanged - only how long a built index stays
 # cached differs.
-BM25_CACHE_MAX_SIZE = int(os.environ.get("BM25_CACHE_MAX_SIZE", "20"))
+BM25_CACHE_MAX_SIZE = int(os.environ.get("BM25_CACHE_MAX_SIZE", "2"))
 
 bm25_cache: "OrderedDict" = OrderedDict()
 
-def clear_bm25_cache(owner_id: str, collection_ids: list[str] | None = None):
+def clear_bm25_cache(
+    owner_id: str,
+    collection_ids: list[str] | None = None
+):
     keys_to_remove = []
 
     for key in bm25_cache.keys():
+
         cached_owner, cached_collections = key
 
         if cached_owner != owner_id:
             continue
 
-        if collection_ids and cached_collections != tuple(collection_ids):
+        if (
+            collection_ids
+            and cached_collections != tuple(collection_ids)
+        ):
             continue
 
         keys_to_remove.append(key)
@@ -68,7 +74,19 @@ def get_bm25_retriever(owner_id: str, collection_ids: list[str] | None, k: int =
     if collection_ids:
         mongo_filter["collectionId"] = {"$in": collection_ids}
 
-    chunks = list(knowledge_chunks_collection.find(mongo_filter))
+    projection = {
+        "_id": 1,
+        "text": 1,
+        "ownerId": 1,
+        "collectionId": 1,
+        "documentId": 1,
+        "chunkIndex": 1,
+    }
+
+    chunks = list(knowledge_chunks_collection.find(
+        mongo_filter, 
+        projection
+    ))
 
     docs = []
 
@@ -76,12 +94,18 @@ def get_bm25_retriever(owner_id: str, collection_ids: list[str] | None, k: int =
         docs.append(
             Document(
                 page_content = chunk["text"],
-                metadata = {
-                    **chunk,
-                    "_id": str(chunk["_id"])
+                metadata={
+                    "_id": str(chunk["_id"]),
+                    "ownerId": chunk.get("ownerId"),
+                    "collectionId": chunk.get("collectionId"),
+                    "documentId": chunk.get("documentId"),
+                    "chunkIndex": chunk.get("chunkIndex"),
                 }
             )
         )
+
+    # We don't need MongoDB chunks anymore.
+    del chunks
 
     if not docs:
         return None
