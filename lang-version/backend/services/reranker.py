@@ -1,87 +1,78 @@
-from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
-from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+import os
+import requests
+from concurrent.futures import ThreadPoolExecutor
 
-reranker = None
+from langchain_core.documents.compressor import BaseDocumentCompressor
+
+RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
+RERANK_URL = f"https://router.huggingface.co/hf-inference/models/{RERANK_MODEL}"
+
+THRESHOLD_SCORE = 0.7
+MAX_CHUNKS = 10
+
+
+class HFAPIReranker(BaseDocumentCompressor):
+    def _score_one(self, query, doc, headers):
+        payload = {
+            "inputs": [
+                {
+                    "text": query, 
+                    "text_pair": doc.page_content
+                }
+            ]
+        }
+
+        response = requests.post(
+            RERANK_URL, 
+            headers=headers, 
+            json=payload
+        )
+
+        response.raise_for_status()
+
+        result = response.json()  # [[{"label": "...", "score": ...}]]
+
+        return result[0][0]["score"] if result and result[0] else 0
+
+    def compress_documents(self, documents, query, callbacks=None):
+        if not documents:
+            return []
+
+        headers = {
+            "Authorization": f"Bearer {os.getenv('HF_TOKEN')}",
+            "Content-Type": "application/json",
+        }
+
+        # The batch endpoint silently returns only 1 result no matter how
+        # many pairs are sent (confirmed by testing, undocumented) - so
+        # each document is scored with its own request instead. Threaded
+        # so 24 documents don't mean 24x sequential latency.
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            scores = list(
+                executor.map(lambda doc: self._score_one(query, doc, headers), documents)
+            )
+
+        scored = sorted(
+            zip(scores, documents), 
+            key=lambda x: x[0], 
+            reverse=True
+        )
+
+        for score, doc in scored:
+            print(f"{score:.4f} | {doc.page_content[:100]}")
+
+        filtered = [
+            (score, doc)
+            for score, doc in scored
+            if score >= THRESHOLD_SCORE
+        ]
+
+        print(f"Successfully reranked {len(scored)} documents.")
+
+        return [
+            doc 
+            for _, doc in filtered[: MAX_CHUNKS]]
+
 
 def get_reranker():
-    global reranker
-
-    if reranker is None:
-        print("Loading Reranker Model...")
-
-        # Limit torch's internal thread pool - reduces resident memory used
-        # by the BLAS/OMP threads without changing reranking output.
-        import torch
-        torch.set_num_threads(1)
-
-        model = HuggingFaceCrossEncoder(
-            model_name="cross-encoder/ms-marco-MiniLM-L-6-v2",
-            model_kwargs={
-                "device": "cpu"
-            }
-        )
-
-        reranker = CrossEncoderReranker(
-            model=model, 
-            top_n=5
-        )
-
-    return reranker
-
-# import os
-# import requests
-# from langchain_core.documents.compressor import BaseDocumentCompressor
-
-# RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
-# RERANK_URL = f"https://router.huggingface.co/hf-inference/models/{RERANK_MODEL}"
-
-
-# class HFAPIReranker(BaseDocumentCompressor):
-#     top_n: int = 5
-
-#     def compress_documents(self, documents, query, callbacks=None):
-#         if not documents:
-#             return []
-
-#         headers = {
-#             "Authorization": f"Bearer {os.getenv('HF_TOKEN')}",
-#             "Content-Type": "application/json"
-#         }
-
-#         # Hugging Face Inference API batch format for pair classification
-#         payload = {
-#             "inputs": [
-#                 {
-#                     "text": query,
-#                     "text_pair": doc.page_content,
-#                 }
-#                 for doc in documents
-#             ]
-#         }
-
-#         response = requests.post(RERANK_URL, headers=headers, json=payload)
-#         response.raise_for_status()
-
-#         results = response.json()
-
-#         scored = []
-#         for doc, result in zip(documents, results):
-#             # Parse response safely regardless of whether HF returns dict or list
-#             if isinstance(result, list) and len(result) > 0:
-#                 score = result[0].get("score", 0)
-#             elif isinstance(result, dict):
-#                 score = result.get("score", 0)
-#             else:
-#                 score = 0
-
-#             scored.append((score, doc))
-
-#         # Sort documents by highest score first
-#         scored.sort(key=lambda x: x[0], reverse=True)
-
-#         print(f"\nSuccessfully reranked {len(scored)} documents.")
-#         return [doc for _, doc in scored[:self.top_n]]
-
-
-# def get_reranker():
-#     return HFAPIReranker(top_n=5)
+    return HFAPIReranker()

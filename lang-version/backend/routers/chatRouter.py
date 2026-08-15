@@ -67,27 +67,28 @@ async def chat(
             {
                 "conversation_id": conversation_id
             }
-        ).sort("createdAt", 1)
+        )
+        .sort("createdAt", -1)
+        .limit(2)
     )
+
+    messages.reverse()  # Ensure chronological order
 
     history = []
 
     for message in messages:
-        history.append(
-            f'{message["role"].capitalize()}: {message["content"]}'
-        )
+        if message["role"] == "user":
+            history.append(
+                f'{message["role"].capitalize()}: '
+                f'Original Message: {message["content"]} '
+                f'Resolved Content: {message["resolved_content"]}'
+            )
+        else:
+            history.append(
+                f'{message["role"].capitalize()}: {message["content"]}'
+            )
 
     conversation_history = "\n".join(history)
-
-    # Save user message
-    messages_collection.insert_one(
-        {
-            "conversation_id": conversation_id,
-            "role": "user",
-            "content": request.query,
-            "createdAt": now
-        }
-    )
 
     initial_state = {
         "user_query": request.query,
@@ -127,8 +128,15 @@ async def chat(
         payload = json.dumps({"type": "sources", "content": sources})
         yield f"data: {payload}\n\n"
 
-        # Save completed assistant message
-        messages_collection.insert_one(
+        messages_collection.insert_many([
+            {
+                "conversation_id": conversation_id,
+                "role": "user",
+                "content": request.query,
+                "resolved_content": state.get("search_query", request.query),
+                "createdAt": now
+            },
+
             {
                 "conversation_id": conversation_id,
                 "role": "assistant",
@@ -136,7 +144,7 @@ async def chat(
                 "sources": sources,
                 "createdAt": datetime.now(UTC)
             }
-        )
+        ])
 
 
         # Update conversation timestamp
