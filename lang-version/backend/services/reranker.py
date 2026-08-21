@@ -7,7 +7,7 @@ from langchain_core.documents.compressor import BaseDocumentCompressor
 RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
 RERANK_URL = f"https://router.huggingface.co/hf-inference/models/{RERANK_MODEL}"
 
-THRESHOLD_SCORE = 0.7
+THRESHOLD_SCORE = 0.2
 MAX_CHUNKS = 10
 
 
