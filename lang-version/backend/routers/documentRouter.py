@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Response
 from fastapi.responses import FileResponse
-from database import documents_collection, collections_collection, page_layouts_collection
+from database import documents_collection, collections_collection, knowledge_chunks_collection , page_layouts_collection
 from bson import ObjectId
 from bson.errors import InvalidId
 from datetime import datetime, UTC
@@ -14,6 +14,8 @@ import time
 
 from services.document_processor import process_document
 from services.bm25_search import clear_bm25_cache
+
+from core.supabase import supabase
 
 from fastapi import BackgroundTasks
 
@@ -60,10 +62,21 @@ async def upload_document(
     stored_name = f"{int(time.time())}_{file.filename}"
 
     # SAVE FILE
-    file_path = os.path.join(UPLOAD_FOLDER, stored_name)
 
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    storage_path = f"documents/{stored_name}"
+
+    supabase.storage.from_("airw-documents").upload(
+        storage_path,
+        contents,
+        {
+            "content-type": file.content_type
+        }
+    )
+
+    # file_path = os.path.join(UPLOAD_FOLDER, stored_name)
+
+    # with open(file_path, "wb") as f:
+    #     f.write(contents)
 
     document_type = DOCUMENT_TYPES.get(file.content_type)
 
@@ -163,6 +176,12 @@ def delete_document(
     # Delete the document from the database
     documents_collection.delete_one({"_id": object_id})
 
+    # delete the knowledge chunks associated with this document
+    knowledge_chunks_collection.delete_many({"documentId": object_id})
+
+    # delete the page layouts associated with this document
+    page_layouts_collection.delete_many({"documentId": document_id})
+
     # clear the BM25 cache for this owner and collection since a document has been deleted
 
     clear_bm25_cache(current_user["id"], [document["collectionId"]])
@@ -186,16 +205,30 @@ def view_document(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found.")
 
-    file_path = os.path.join(UPLOAD_FOLDER, document["fileName"])
+    storage_path = f"documents/{document['fileName']}"
 
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found on the server.")
+    # file_path = os.path.join(UPLOAD_FOLDER, document["fileName"])
+
+    # if not os.path.exists(file_path):
+    #     raise HTTPException(status_code=404, detail="File not found on the server.")
+
+    try:
+        file_bytes = supabase.storage.from_("airw-documents").download(storage_path)
+    except Exception as e:
+        print("Supabase download error:", e)
+
+        raise HTTPException(
+            status_code=404,
+            detail="File not found in storage."
+        )
 
     # content_disposition_type="inline" tells the browser to open it in-browser rather than downloading
-    return FileResponse(
-        path=file_path,
+    return Response(
+        content=file_bytes,
         media_type=document.get("mimeType", "application/pdf"),
-        content_disposition_type="inline" 
+        headers={
+            "Content-Disposition": "inline"
+        }
     )
 
 # GET THE SPANS

@@ -42,3 +42,30 @@ def extract_keywords(text: str):
         _nlp = None
 
     return sorted(set(keywords))
+
+# import re
+
+# # Common English stopwords.
+# STOPWORDS = {
+#     "a", "an", "the", "and", "or", "but", "if", "then",
+#     "of", "in", "on", "at", "to", "for", "from", "by",
+#     "with", "about", "as", "is", "are", "was", "were",
+#     "be", "been", "being", "this", "that", "these", "those",
+#     "it", "its", "they", "them", "their", "there",
+#     "he", "she", "his", "her", "we", "you", "your",
+#     "i", "me", "my", "our", "us",
+#     "do", "does", "did", "have", "has", "had",
+#     "can", "could", "will", "would", "should",
+#     "what", "which", "who", "whom", "where", "when",
+#     "why", "how"
+# }
+
+
+# def extract_keywords(text: str):
+#     words = re.findall(r"[a-zA-Z]+", text.lower())
+
+#     return [
+#         word
+#         for word in words
+#         if word not in STOPWORDS
+#     ]

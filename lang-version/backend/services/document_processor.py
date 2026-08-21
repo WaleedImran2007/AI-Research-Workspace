@@ -16,6 +16,9 @@ from utils.splitter import create_chunks
 from utils.embedder import create_embeddings
 from utils.keywords import extract_keywords
 
+from core.supabase import supabase
+import tempfile
+
 
 def process_document(document_id: str):
     try:
@@ -44,12 +47,11 @@ def process_document(document_id: str):
         }
     )
 
-    file_path = os.path.join(
-        "uploads/documents",
-        document["fileName"]
-    )
+    storage_path = f"documents/{document['fileName']}"
 
-    if not os.path.exists(file_path):
+    try:
+        file_bytes = supabase.storage.from_("airw-documents").download(storage_path)
+    except Exception as e:
         documents_collection.update_one(
             {"_id": object_id},
             {
@@ -64,6 +66,13 @@ def process_document(document_id: str):
             status_code=404,
             detail="Document file not found."
         )
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".pdf",
+        delete=False
+    ) as temp_file:
+        temp_file.write(file_bytes)
+        file_path = temp_file.name
 
     try:
         # Step 1: PDF -> LangChain Documents

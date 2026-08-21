@@ -1,0 +1,15 @@
+services:
+  backend:
+    build: .
+    container_name: airw-backend-container
+
+    ports:
+      - "8000:8000"
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./uploads:/backend/uploads
+
+    restart: unless-stopped
