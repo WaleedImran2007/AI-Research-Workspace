@@ -65,7 +65,7 @@ async def upload_document(
 
     storage_path = f"documents/{stored_name}"
 
-    supabase.storage.from_("airw-documents").upload(
+    upload_result = supabase.storage.from_("airw-documents").upload(
         storage_path,
         contents,
         {
@@ -73,10 +73,7 @@ async def upload_document(
         }
     )
 
-    # file_path = os.path.join(UPLOAD_FOLDER, stored_name)
-
-    # with open(file_path, "wb") as f:
-    #     f.write(contents)
+    print("SUPABASE UPLOAD RESULT:", upload_result)
 
     document_type = DOCUMENT_TYPES.get(file.content_type)
 
