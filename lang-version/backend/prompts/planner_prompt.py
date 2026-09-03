@@ -1,4 +1,8 @@
 from langchain_core.prompts import ChatPromptTemplate
+from schemas.plan import Plan
+from langchain_core.output_parsers import PydanticOutputParser
+
+parser = PydanticOutputParser(pydantic_object=Plan)
 
 planner_prompt = ChatPromptTemplate.from_messages(
 [
@@ -23,6 +27,18 @@ planner_prompt = ChatPromptTemplate.from_messages(
 
         Previous Plan:
         {previous_plan}
+
+        Conversation History:
+        {conversation_history}
+
+        Current Image Status:
+        {image_available}
+
+        Image Data:
+        {image_data}
+
+        Web Enabled:
+        {web_enabled}
 
         You are an AI Planner.
 
@@ -56,23 +72,39 @@ planner_prompt = ChatPromptTemplate.from_messages(
             - What's (250 + 75) / 5?
 
         4. web_search
-        - Use when the user asks about current events, real-time information, or anything that
-            would not be found in uploaded documents (e.g. news, weather, sports, entertainment, celebrity news, prices, general knowledge lookups).
+        - Use this tool ONLY when Web Enabled is true.
+
+        - If Web Enabled is false:
+            - DO NOT use web_search under any circumstances.
+            - Answer using uploaded documents, conversation history,
+              other available tools, or the model's own knowledge when appropriate.
+
+        - If Web Enabled is true:
+            - Web search is available and should be preferred for general
+            knowledge questions, current information, or questions that are
+            not explicitly asking about the user's uploaded documents.
+            - If the user explicitly asks about uploaded documents, use retrieval.
+            - If the question genuinely requires both external information and
+            uploaded documents, use both web_search and retrieval.
 
         - Input arguments it supports:
-        1. query: The search query string. (required)
-        2. max_results: The maximum number of search results to return. (optional, default: 5)
-        3. search_depth: The depth of the search. (optional, default: "basic")
-        4. topic: Category of search. Use "news" for recent events/news and "general" for overall lookups. (optional, default: "general")
-        5. days: The number of days to look back for news articles. (optional, default: None)
-        
+            1. query: The search query string. (required)
+            2. max_results: The maximum number of search results to return. (optional, default: 5)
+            3. search_depth: The depth of the search. (optional, default: "basic")
+            4. topic: Category of search. Use "news" for recent events/news
+               and "general" for overall lookups. (optional, default: "general")
+            5. days: The number of days to look back for news articles. (optional, default: None)
+
         - Examples:
-            - What's the latest news on AI regulation?
+            - What's the latest news on AI regulation? 
             - Who is the current CEO of OpenAI?
             - What is the current price of gold?
 
-        You may return more than one tool in the plan if the query genuinely requires it
-        (e.g. a question that needs both a document lookup and a calculation).
+            With web_search enabled
+
+        You may return more than one tool in the plan if the query genuinely
+        requires it (e.g. a question that needs both a document lookup and
+        a calculation).
 
         5. python_tool
         Use when the user asks for:
@@ -84,8 +116,6 @@ planner_prompt = ChatPromptTemplate.from_messages(
         - statistics
         - writing or executing Python code
         - tasks that require Python libraries such as pandas, numpy, matplotlib or statistics.
-
-        Input:
 
         {{
             "task": "task for the Python tool",
@@ -119,17 +149,115 @@ planner_prompt = ChatPromptTemplate.from_messages(
         not retrieval — retrieval is ONLY for questions about content inside uploaded documents
         (e.g. definitions, explanations, comparisons of lecture material).
 
-        Schema:
+        6. vision_tool
+        - Use vision_tool when the user asks about, describes, analyzes, interprets,
+        extracts, explains, or refers to information contained in an image.
 
-        {{
-            "plan": [
-                {{
-                    "tool": "",
-                    "reason": "",
-                    "input": {{}}
-                }}
-            ]
-        }}
+        - CURRENT IMAGE:
+        If image_available is true, the user has attached an image to the CURRENT
+        message.
+
+        If the user's question is related to information visible in that current
+        image, ALWAYS use vision_tool.
+
+        Examples:
+        - User uploads an image containing code and asks:
+            "Explain me res.download()"
+            -> Use vision_tool because the current image contains the code being discussed.
+
+        - User uploads an image containing a chart and asks:
+            "What does this chart show?"
+            -> Use vision_tool.
+
+        - User uploads an image but asks:
+            "What is a Python dictionary?"
+            -> Do NOT use vision_tool if the question does not depend on the image.
+
+        - PREVIOUS IMAGE:
+        If image_available is false but conversation history indicates that the user
+        previously uploaded an image, use vision_tool when the current question
+        refers to or requires information from that previous image.
+
+        In this case, the image filename and content type must be taken from the
+        conversation history and placed into the vision_tool input.
+
+        Example:
+        User previously uploaded: abc.png
+        User:
+            "What was in that image?"
+        -> Use vision_tool with image_filename="abc.png".
+
+        - Vision has priority over retrieval/web_search when the requested information
+        comes from an image.
+
+        - Do NOT use vision merely because an old image exists in conversation history.
+        The current question must actually require information from that image.
+
+        - When using vision_tool, ALWAYS provide:
+            "query": <the user's actual question>
+            "image_filename": <current image filename OR filename from conversation history>
+            "content_type": <current image content type OR content type from history>
+
+        - If image_available is true, prefer the CURRENT image's filename and content_type over any image information found in conversation history.
+
+
+        7. excel_tool
+        - Use excel_tool when the user asks to MODIFY, EDIT, CHANGE, CREATE,
+        ADD, DELETE, RENAME, or otherwise automate an Excel file.
+
+        - Use excel_tool for actions that change the contents or structure
+        of an Excel workbook.
+
+        - Examples of tasks that require excel_tool:
+            - Rename a column
+            - Delete a column
+            - Add a column
+            - Add a row
+            - Delete a row
+            - Modify numeric values
+            - Add formulas
+            - Create calculated columns
+            - Apply formatting
+            - Add conditional formatting
+            - Create charts
+            - Create or modify worksheets
+            - Perform calculations across multiple sheets
+            - Any other Excel automation or modification requested by the user
+
+        - Do NOT use excel_tool for questions that only require ANALYZING
+        or READING Excel data.
+
+        - If the user asks a question such as:
+            "What is the average marks?"
+            "Who scored the highest?"
+            "How many students are from Lahore?"
+        -> Use python_tool if the Excel data needs to be analyzed/calculated.
+
+        - If the user asks to MODIFY the Excel file:
+            "Change Marks to Score."
+            "Delete the City column."
+            "Add a new student."
+        -> Use excel_tool.
+
+        - EXCEL FILE:
+        The "file_name" field must contain the name of the Excel file that
+        the user wants to modify.
+
+        - TASK:
+        The "task" field must contain a clear natural-language description
+        of exactly what the user wants to do to the Excel file.
+
+        - Do NOT generate Excel operations, parameters, formulas, Python code,
+        column letters, row numbers, or implementation details.
+
+        - The planner only identifies the Excel file and describes the
+        user's requested task. The excel_tool will inspect the workbook
+        and determine how to perform the task.
+
+        - The "task" should preserve all important requirements from the
+        user's request.
+
+        - Do not add requirements that were not requested by the user.
 
         User:
         What is ACID?
@@ -376,9 +504,111 @@ planner_prompt = ChatPromptTemplate.from_messages(
             }}]
         }}
 
+        User:
+        What's in this image?
+
+        Current Image:
+        abc.png
+
+        Output:
+        {{
+            "plan": [
+                {{
+                    "tool": "vision_tool",
+                    "reason": "The user wants information about the current image.",
+                    "input": {{
+                        "query": "What's in this image?",
+                        "image_filename": "abc.png",
+                        "content_type": "image/png"
+                    }}
+                }}
+            ]
+        }}
+
+        User:
+        Explain me each method shown in this image.
+
+        Output:
+        {{
+            "plan": [
+                {{
+                    "tool": "vision_tool",
+                    "reason": "The user wants to understand information shown in the image.",
+                    "input": {{
+                        "query": "Explain me each method shown in this image.",
+                        "image_filename": "abc.png",
+                        "content_type": "image/png"
+                    }}
+                }}
+            ]
+        }}
+
+        User:
+        What was in that image? 
+
+        Note:
+        - The user is referring to a previously uploaded image.
+        So filename and content type of the image should be provided by the conversation history.
+
+        Output:
+        {{
+            "plan": [
+                {{
+                    "tool": "vision_tool",
+                    "reason": "The user is referring to a previously uploaded image and wants information from it.",
+                    "input": {{
+                        "query": "What was in that image?",
+                        "image_filename": "abc.png",
+                        "content_type": "image/png"
+                    }}
+                }}
+            ]
+        }}
+
+        User:
+        Compare the transaction concept from my documents with the diagram in the previous image.
+
+        Output:
+        {{
+            "plan": [
+                {{
+                    "tool": "vision",
+                    "reason": "The user needs information from the previous image.",
+                    "input": {{
+                        "query": "Compare the diagram in the previous image with the transaction concept.",
+                        "image_filename": "abc.png",
+                        "content_type": "image/png"
+                    }}
+                }},
+                {{
+                    "tool": "retrieval",
+                    "reason": "The user needs information about transactions from uploaded documents.",
+                    "input": {{}}
+                }}
+            ]
+        }}
+
+
+        User:
+        "Rename the Marks column to Score in students.xlsx."
+
+        Output:
+        {{
+            "plan": [
+                {{
+                    "tool": "excel_tool",
+                    "reason": "The user wants to modify an Excel file by renaming a column.",
+                    "input": {{
+                        "file_name": "students.xlsx",
+                        "task": "Rename the Marks column to Score."
+                    }}
+                }}
+            ]
+        }}
+
         User Query:
         {user_query}
     """
     )
 
-])
+]).partial(format_instructions=parser.get_format_instructions())

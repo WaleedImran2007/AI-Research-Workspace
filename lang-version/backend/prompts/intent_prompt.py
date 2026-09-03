@@ -275,20 +275,49 @@ Output:
 
 7. TASK
 
-If the user asks the system to perform an action that is not primarily
-a database operation, classify it as "task".
+Tasks come in two forms — distinguish them carefully.
 
-needs_planner MUST be true.
+7a. GENERATIVE TASK (no planner needed)
+
+If the user asks for something the assistant can produce directly from
+its own knowledge or instructions — writing, translating, rewriting,
+composing, explaining in another style, brainstorming — with NO
+dependency on the user's documents, a database, or an external tool,
+classify as "task" but set needs_planner to FALSE.
 
 Examples:
 
-User: "Create a report for me"
+User: "Translate 'how are you' into Urdu"
 
 Output:
 {{
     "intent": "task",
-    "needs_planner": true
+    "needs_planner": false
 }}
+
+User: "Write me a motivational poem"
+
+Output:
+{{
+    "intent": "task",
+    "needs_planner": false
+}}
+
+User: "Rewrite this sentence to sound more formal"
+
+Output:
+{{
+    "intent": "task",
+    "needs_planner": false
+}}
+
+7b. TOOL-DEPENDENT TASK (planner needed)
+
+If the user asks for an action that requires retrieving or acting on
+external data — the user's uploaded documents, the database, files,
+or any tool/integration — classify as "task" with needs_planner TRUE.
+
+Examples:
 
 User: "Summarize this document"
 
@@ -298,8 +327,30 @@ Output:
     "needs_planner": true
 }}
 
+User: "Create a report from my uploaded lecture notes"
 
-8. GREETING + REQUEST
+Output:
+{{
+    "intent": "task",
+    "needs_planner": true
+}}
+
+
+8. DISAMBIGUATING 7a VS 7b
+
+Ask: does answering this require anything beyond the assistant's own
+language ability — i.e. does it need to read a specific document,
+query a database, call an API, or do a calculation?
+
+- No -> generative task, needs_planner FALSE
+- Yes -> tool-dependent task, needs_planner TRUE
+
+Do not default to true just because the user phrased it as a request
+to "do" something. Writing, translating, and composing are things the
+assistant does directly, not things that require a planner.
+
+
+9. GREETING + REQUEST
 
 If a greeting is combined with a real request, ignore the greeting
 and classify according to the actual request.
@@ -323,7 +374,7 @@ Output:
 }}
 
 
-9. DISAMBIGUATING "question" VS "rag_query"
+10. DISAMBIGUATING "question" VS "rag_query"
 
 This is the most important distinction. Use this test:
 
@@ -353,10 +404,11 @@ Use these rules:
 - greeting -> false
 - conversation -> false
 - direct general question -> false
+- generative task (7a) -> false
 - question requiring a tool -> true
 - rag_query -> true
 - database_task -> true
-- task -> true
+- tool-dependent task (7b) -> true
 
 The planner should only be used when another tool, document retrieval,
 database operation, or multi-step action is required.

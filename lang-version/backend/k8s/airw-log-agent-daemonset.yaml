@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: airw-log-agent
+  namespace: airw
+
+spec:
+  selector:
+    matchLabels:
+      app: airw-log-agent
+
+  template:
+    metadata:
+      labels:
+        app: airw-log-agent
+
+    spec:
+      containers:
+        - name: log-agent
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                echo "AIRW log agent running on $(hostname)"
+                sleep 10
+              done

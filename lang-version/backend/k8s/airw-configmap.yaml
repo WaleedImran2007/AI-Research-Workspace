@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: airw-backend-configmap
+  namespace: airw
+
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "info"

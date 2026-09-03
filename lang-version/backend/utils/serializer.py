@@ -4,6 +4,10 @@ def user_serializer(user: dict) -> dict:
         "username": user["username"],
         "email": user["email"],
         "role": user["role"],
+
+        "aiRequestsRemaining": user.get("aiRequestsRemaining", 0),
+        "aiResetDate": user.get("aiResetDate"),
+
         "createdAt": user["createdAt"].isoformat() if "createdAt" in user else None,
         "updatedAt": user["updatedAt"].isoformat() if "updatedAt" in user else None,
     }
@@ -71,6 +75,8 @@ def message_serializer(message: dict) -> dict:
         "role": message["role"],
         "content": message["content"],
         "sources": message.get("sources", []),
+        "image": message.get("image"),
+        "file": message.get("file"),
         "createdAt": message["createdAt"] if "createdAt" in message else None,
     }
 

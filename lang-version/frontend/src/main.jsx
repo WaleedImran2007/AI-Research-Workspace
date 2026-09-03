@@ -6,6 +6,8 @@ import App from './App.jsx'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from '../Context/AuthContext.jsx';
 
+import AILayout from './AILayout.jsx';
+
 // COMPONENTS
 import Home from './pages/Home.jsx';
 import SignUp from './pages/SignUp.jsx';
@@ -14,6 +16,7 @@ import Collections from './pages/Collections.jsx';
 import CollectionDetails from './pages/CollectionDetails.jsx';
 import AI from './pages/AI.jsx';
 import PDFViewer from './pages/PDFViewer.jsx';
+import AudioViewer from './pages/AudioViewer.jsx';
 
 const router = createBrowserRouter([
   {
@@ -25,8 +28,15 @@ const router = createBrowserRouter([
       { path: '/login', element: <Login /> },
       { path: '/collections', element: <Collections /> },
       { path: '/collections/:collectionId', element: <CollectionDetails /> },
+      { path: '/documents/:documentId', element: <PDFViewer /> },
+      { path: '/audio/:documentId', element: <AudioViewer /> },
+    ]
+  },
+
+  {
+    element: <AILayout />,
+    children: [
       { path: '/ai', element: <AI /> },
-      { path: '/documents/:documentId', element: <PDFViewer /> }
     ]
   }
 

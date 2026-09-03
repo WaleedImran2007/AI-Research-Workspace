@@ -1,8 +1,8 @@
 from prompts.reflector_prompt import reflector_prompt
 from schemas.reflection import Reflection
-from core.llm import non_streaming_llm
+from core.llm import instant_llm
 
-structured_llm = non_streaming_llm.with_structured_output(
+structured_llm = instant_llm.with_structured_output(
     Reflection,
     method="json_schema"
 )

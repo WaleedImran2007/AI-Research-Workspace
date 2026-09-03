@@ -1,20 +1,28 @@
-# Python
-venv/
-.venv/
-__pycache__/
-*.pyc
-
-# Environment variables
+# Environment / secrets
 .env
 .env.*
+!.env.example
 
-# Node
-node_modules/
-dist/
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Generated files
+lang-version/backend/generated/
+lang-version/backend/temp/
+
+# Kubernetes secrets
+lang-version/backend/k8s/airw-secret.yaml
 
 # IDE
 .vscode/
 .idea/
 
-# Python cache
-.pytest_cache/
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

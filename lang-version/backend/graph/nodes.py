@@ -1,3 +1,6 @@
+import asyncio
+import threading
+
 from graph.state import AgentState
 
 from utils.embedder import create_embedding
@@ -23,12 +26,18 @@ from datetime import datetime, UTC
 
 MAX_RETRIES = 3
 
-def memory_node(state: AgentState):
-    user_query = state.get("user_query", "")
+# Keep strong references to fire-and-forget memory tasks so they aren't
+# garbage-collected mid-flight (asyncio only holds a weak reference).
+
+_background_memory_tasks: set[asyncio.Task] = set()
+
+def _store_memories_sync(user_query: str, owner_id: str) -> None:
     decision = detect_memory(user_query)
 
+    print("Decision: ", decision)
+    
     if not decision.should_store:
-        return {}
+        return
 
     now = datetime.now(UTC)
 
@@ -42,7 +51,7 @@ def memory_node(state: AgentState):
 
         memories_collection.update_one(
             {
-                "ownerId": state["owner_id"],
+                "ownerId": owner_id,
                 "key": item.key
             },
             {
@@ -56,13 +65,22 @@ def memory_node(state: AgentState):
                 },
 
                 "$setOnInsert": {
-                    "ownerId": state["owner_id"],
+                    "ownerId": owner_id,
                     "createdAt": now
                 },
             },
 
             upsert=True
         )
+
+def memory_node(state: AgentState):
+    user_query = state.get("user_query", "")
+
+    threading.Thread(
+        target = _store_memories_sync,
+        args = (user_query, state["owner_id"]),
+        daemon = True
+    ).start()
 
     return {}
     
@@ -174,6 +192,10 @@ def planner_node(state: AgentState):
             user_query=state["search_query"],
             feedback=state["feedback"],
             previous_plan=state["plan"],
+            conversation_history=state["conversation_history"],
+            image_data=state["image"],
+            image_available=state["image"] is not None,
+            web_enabled=state["web_enabled"]
         )
 
     return {
@@ -184,7 +206,8 @@ async def executer_node(state: AgentState):
     context = await execute(
         plan=state["plan"],
         filters=state["resolved_filters"],
-        owner_id=state["owner_id"]
+        owner_id=state["owner_id"],
+        image=state.get("image")
     )
     return {
         "context": context

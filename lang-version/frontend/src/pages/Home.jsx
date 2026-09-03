@@ -32,10 +32,10 @@ function Home() {
                     {isAuthenticated ? (
                         <>
                             <Link
-                                to="/upload"
+                                to="/ai"
                                 className="rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
                             >
-                                Upload Document
+                                Ask AI
                             </Link>
 
                             <Link

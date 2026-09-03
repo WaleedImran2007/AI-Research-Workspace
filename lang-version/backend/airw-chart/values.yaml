@@ -1,0 +1,64 @@
+replicaCount: 2
+
+image:
+  repository: waleedimran/airw-backend
+  tag: v6
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+serviceAccount:
+  create: true
+  name: airw-backend-serviceaccount
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+
+probes:
+  startupProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    
+    failureThreshold: 10
+    periodSeconds: 5
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+
+storage:
+  enabled: false
+  existingClaim: airw-backend-pvc
+  mountPath: /app/data
+
+config:
+  APP_ENV: production
+  LOG_LEVEL: info
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70

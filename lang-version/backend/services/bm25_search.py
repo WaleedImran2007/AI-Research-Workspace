@@ -81,6 +81,11 @@ def get_bm25_retriever(owner_id: str, collection_ids: list[str] | None, k: int =
         "collectionId": 1,
         "documentId": 1,
         "chunkIndex": 1,
+        "documentName": 1,
+        "fileName": 1,
+        "documentType": 1,
+        "page": 1,
+        "startTime": 1,
     }
 
     chunks = list(knowledge_chunks_collection.find(
@@ -100,6 +105,11 @@ def get_bm25_retriever(owner_id: str, collection_ids: list[str] | None, k: int =
                     "collectionId": chunk.get("collectionId"),
                     "documentId": chunk.get("documentId"),
                     "chunkIndex": chunk.get("chunkIndex"),
+                    "documentName": chunk.get("documentName"),
+                    "fileName": chunk.get("fileName"),
+                    "documentType": chunk.get("documentType"),
+                    "page": chunk.get("page"),
+                    "startTime": chunk.get("startTime"),
                 }
             )
         )

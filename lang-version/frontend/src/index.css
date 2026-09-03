@@ -34,6 +34,15 @@ body {
     @apply bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100;
 }
 
+.scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
 /* Subtle, professional scrollbars */
 ::-webkit-scrollbar {
     width: 8px;

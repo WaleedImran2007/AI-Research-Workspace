@@ -23,6 +23,14 @@ generate_python_prompt = ChatPromptTemplate.from_messages([
             - The script must run top-to-bottom with zero modification, zero missing imports, zero undefined names.
             - Before finalizing, mentally re-trace the script line by line and confirm every variable is defined before use and every import is present. Only then output the code.
 
+            IMPORTANT:
+            - `filename` is already provided by the executor.
+            - NEVER redefine or assign a new value to `filename`.
+            - When generating a graph, save it using exactly:
+                plt.savefig(filename)
+            - Do not use another filename.
+            - Do not create your own output filename.
+
             ========================
             FILE RULES
             ========================

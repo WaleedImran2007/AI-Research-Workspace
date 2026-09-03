@@ -8,7 +8,8 @@ from utils.jwt import create_access_token
 
 from database import users_collection
 
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
+from zoneinfo import ZoneInfo
 
 import os
 
@@ -17,6 +18,8 @@ router = APIRouter()
 # SIGN UP
 @router.post("/signup", response_model=UserResponse)
 def signup(user: SignUpSchema):
+    PAKISTAN_TZ = ZoneInfo("Asia/Karachi")
+
     # Check if the user already exists
     existing_user = users_collection.find_one({"email": user.email})
     if existing_user:
@@ -40,12 +43,28 @@ def signup(user: SignUpSchema):
     if user.email == os.getenv("ADMIN_EMAIL"):
         role = 'admin'
 
+    now = datetime.now(PAKISTAN_TZ)
+
+    next_midnight = (
+        now.replace(
+            hour = 0,
+            minute = 0,
+            second = 0,
+            microsecond = 0
+        ) 
+        + timedelta(days=1)
+    )
+
     # Create a new user document
     new_user = {
         "username": user.username,
         "email": user.email,
         "password": hashed_password,
         "role": role,
+
+        "aiRequestsRemaining": 15,
+        "aiResetDate": next_midnight,
+
         "createdAt": datetime.now(UTC),
         "updatedAt": datetime.now(UTC),
     }

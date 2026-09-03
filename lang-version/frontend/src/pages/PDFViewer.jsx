@@ -69,7 +69,7 @@ function PDFViewer() {
     }
   };
 
-  const pdfUrl = `${import.meta.env.VITE_API_URL}/documents/${documentId}/view`;
+  const pdfUrl = `${import.meta.env.VITE_API_URL}/documents/${documentId}/view/pdf`;
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 space-y-4">

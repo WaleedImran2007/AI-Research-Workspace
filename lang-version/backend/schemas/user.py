@@ -17,6 +17,10 @@ class UserResponse(BaseModel):
     username: str
     email: EmailStr
     role: str
+
+    aiRequestsRemaining: int
+    aiResetDate: Optional[datetime]
+
     createdAt: Optional[datetime]
     updatedAt: Optional[datetime]
 

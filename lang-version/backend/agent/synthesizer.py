@@ -13,6 +13,10 @@ def build_context(context: dict):
     seen_sources = set()
 
     for tool_name, tool_result in context.items():
+        print(f"\n===== TOOL: {tool_name} =====")
+        print("RESULT:", tool_result)
+        print("SOURCES:", getattr(tool_result, "sources", None))
+
         if tool_result is None:
             continue
 
@@ -32,9 +36,13 @@ def build_context(context: dict):
         # sources
         if tool_result.sources:
             for source in tool_result.sources:
+                print("SOURCE:", source)
+
                 source_key = (
                     source.documentId,
+                    source.documentType,
                     source.page,
+                    source.startTime,
                 )
 
                 if source_key in seen_sources:
@@ -44,6 +52,8 @@ def build_context(context: dict):
 
                 # Convert Source into dict for serialization
                 sources.append(source.model_dump())
+
+    print("\nFINAL SOURCES:", sources)
 
     return "\n\n".join(context_parts), sources
 

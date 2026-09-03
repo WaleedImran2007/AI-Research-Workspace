@@ -24,7 +24,7 @@ def page_loader(filters, owner_id, input = None) -> ToolResult:
 
     chunks.sort(
         key=lambda x: (
-            x["page"],
+            x.get("page") if x.get("page") is not None else x.get("startTime", 0),
             x["chunkIndex"]
         )
     )
@@ -36,7 +36,12 @@ def page_loader(filters, owner_id, input = None) -> ToolResult:
     for chunk in chunks:
         llm_context += chunk["text"].strip() + "\n\n"
 
-        source_key = (chunk["documentId"], chunk.get("page"))
+        source_key = (
+            chunk["documentId"],
+            chunk.get("documentType"),
+            chunk.get("page"),
+            chunk.get("startTime"),
+        )
 
         if source_key not in seen_documents:
             seen_documents.add(source_key)
@@ -46,7 +51,9 @@ def page_loader(filters, owner_id, input = None) -> ToolResult:
                 "documentId": chunk["documentId"],
                 "documentName": chunk.get("documentName", "Unknown Document"),
                 "fileName": chunk.get("fileName", "Unknown File"),
-                "page": chunk.get("page", "Unknown Page"),
+                "documentType": chunk.get("documentType"),
+                "page": chunk.get("page"),
+                "startTime": chunk.get("startTime"),
                 "text": chunk["text"]
             })
 

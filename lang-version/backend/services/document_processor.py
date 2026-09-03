@@ -137,6 +137,7 @@ def process_document(document_id: str):
                     "documentId": document_id,
                     "documentName": document["originalName"],
                     "fileName": document["fileName"],
+                    "documentType": "pdf",
 
                     "page": chunk.metadata["page"],
                     "keywords": keywords,

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: airw-backend-deployment
+  namespace: airw
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: airw-backend
+
+  template:
+    metadata:
+      labels:
+        app: airw-backend
+
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+
+      containers:
+        - name: airw-backend-container
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+
+          ports:
+            - containerPort: 8000
+
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.startupProbe.httpGet.path }}
+              port: {{ .Values.probes.startupProbe.httpGet.port }}
+
+            failureThreshold: {{ .Values.probes.startupProbe.failureThreshold }}
+            periodSeconds: {{ .Values.probes.startupProbe.periodSeconds }}
+
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readinessProbe.httpGet.path }}
+              port: {{ .Values.probes.readinessProbe.httpGet.port }}
+
+            initialDelaySeconds: {{ .Values.probes.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readinessProbe.periodSeconds }}
+
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.livenessProbe.httpGet.path }}
+              port: {{ .Values.probes.livenessProbe.httpGet.port }}
+
+            initialDelaySeconds: {{ .Values.probes.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.livenessProbe.periodSeconds }}
+
+          volumeMounts:
+            - name: airw-storage
+              mountPath: {{ .Values.storage.mountPath }}
+
+          envFrom:
+            - secretRef:
+                name: airw-backend-secrets
+
+            - configMapRef:
+                name: airw-backend-configmap
+
+      volumes:
+        - name: airw-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.existingClaim }}

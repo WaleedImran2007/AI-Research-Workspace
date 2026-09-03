@@ -1,3 +1,5 @@
+import shutil
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -7,6 +9,7 @@ import ast
 import uuid
 import re
 import contextlib
+import tempfile
 
 from schemas.tool_result import ToolResult
 
@@ -17,6 +20,11 @@ from .python_helpers import get_csv_schema
 from chains.generate_python_chain import generate_python_chain
 
 from langchain_core.tools import tool
+
+from services.python_service import (
+    upload_generated_image,
+    download_file
+)
 
 # Included all libraries permitted in the system prompt
 ALLOWED_IMPORTS = {
@@ -110,120 +118,315 @@ def generate_python_code(task: str, filename: str, path: str = None, schema: dic
 
 @tool
 def python_tool(filters, owner_id, input=None) -> ToolResult:
-    """Generates and executes Python code based on the provided task in the input, optionally using a document for context."""
+    """Generates and executes Python code based on the provided task in the input,
+    optionally using a document for context.
+    """
 
     task = input.get("task") if input else ""
     return_code = input.get("return_code", False) if input else False
     document_name = input.get("document_name") if input else None
 
+    os.makedirs("generated", exist_ok=True)
+
+    # ---------------------------------------------------------
+    # Variables
+    # ---------------------------------------------------------
+
     path = None
     schema = None
+    document = None
+
+    # Generated image path
+    filename = os.path.join(
+        "generated",
+        f"{uuid.uuid4()}.png"
+    )
+
+    print("Generated Output Path:", filename)
+
+    # ---------------------------------------------------------
+    # Find document
+    # ---------------------------------------------------------
 
     if document_name:
+
         document = documents_collection.find_one(
             {
                 "ownerId": owner_id,
                 "originalName": {
-                    "$regex": f"^{document_name}$",
+                    "$regex": f"^{re.escape(document_name)}$",
                     "$options": "i"
                 }
             }
         )
 
-        if document:
-            path = os.path.join(
-                UPLOAD_FOLDER,
-                document["fileName"]
+        if not document:
+            return ToolResult(
+                llm_context=(
+                    f"Could not find the document "
+                    f"'{document_name}'."
+                ),
+                sources=[]
             )
 
-            if document["documentType"] == "csv":
+        print(
+            "Found Document:",
+            document.get("originalName")
+        )
+
+        # -----------------------------------------------------
+        # Download document from Supabase
+        # -----------------------------------------------------
+
+        document_type = document.get("documentType")
+        stored_filename = document.get("fileName")
+
+        if not stored_filename:
+            return ToolResult(
+                llm_context=(
+                    f"Document '{document_name}' does not have "
+                    f"a stored filename."
+                ),
+                sources=[]
+            )
+
+        # Create a temporary directory for downloaded files
+        temp_dir = tempfile.mkdtemp(
+            prefix="airw_python_"
+        )
+
+        path = os.path.join(
+            temp_dir,
+            stored_filename
+        )
+
+        try:
+
+            print(
+                "Downloading document from Supabase:",
+                stored_filename
+            )
+
+            download_file(
+                stored_filename=stored_filename,
+                output_path=path
+            )
+
+            print(
+                "Downloaded document to:",
+                path
+            )
+
+        except Exception as e:
+
+            shutil.rmtree(
+                temp_dir,
+                ignore_errors=True
+            )
+
+            return ToolResult(
+                llm_context=(
+                    f"Could not download document "
+                    f"'{document_name}': {str(e)}"
+                ),
+                sources=[]
+            )
+
+        # -----------------------------------------------------
+        # Get CSV schema
+        # -----------------------------------------------------
+
+        if document_type == "csv":
+
+            try:
                 schema = get_csv_schema(path)
-                
 
-    # Ensure output folder exists
-    os.makedirs("generated", exist_ok=True)
-    filename = f"generated/{uuid.uuid4()}.png"
+                print(
+                    "CSV Schema:",
+                    schema
+                )
 
-    print("Filename:", filename)
+            except Exception as e:
 
-    if path:
-        print("File Path:", path)
+                shutil.rmtree(
+                    temp_dir,
+                    ignore_errors=True
+                )
 
-    # 1. Fetch raw output from LLM
-    raw_code = generate_python_code(task, filename, path, schema)
+                return ToolResult(
+                    llm_context=(
+                        f"Could not inspect CSV document "
+                        f"'{document_name}': {str(e)}"
+                    ),
+                    sources=[]
+                )
 
-    # 2. Clean markdown backticks before validation
-    code = clean_generated_code(raw_code)
+    else:
+        temp_dir = None
 
-    # 3. Validate code structure via AST
-    validate_python_code(code)
-
-    print("\n===== GENERATED PYTHON CODE =====")
-    print(code)
-    print("=================================\n")
-
-    stdout_buffer = io.StringIO()
+    # ---------------------------------------------------------
+    # Generate Python code
+    # ---------------------------------------------------------
 
     try:
-        with contextlib.redirect_stdout(stdout_buffer):
-            # Pass filename so `plt.savefig(filename)` works inside exec()
+
+        raw_code = generate_python_code(
+            task=task,
+            filename=filename,
+            path=path,
+            schema=schema
+        )
+
+        # -----------------------------------------------------
+        # Clean generated code
+        # -----------------------------------------------------
+
+        code = clean_generated_code(
+            raw_code
+        )
+
+        # -----------------------------------------------------
+        # Validate generated code
+        # -----------------------------------------------------
+
+        validate_python_code(
+            code
+        )
+
+        print(
+            "\n===== GENERATED PYTHON CODE ====="
+        )
+
+        print(code)
+
+        print(
+            "=================================\n"
+        )
+
+        # -----------------------------------------------------
+        # Execute generated code
+        # -----------------------------------------------------
+
+        stdout_buffer = io.StringIO()
+
+        with contextlib.redirect_stdout(
+            stdout_buffer
+        ):
+
             safe_globals = {
                 "__builtins__": __builtins__,
                 "filename": filename,
                 "path": path,
             }
 
-            exec(code, safe_globals)
+            exec(
+                code,
+                safe_globals
+            )
 
         output = stdout_buffer.getvalue().strip()
 
+        # -----------------------------------------------------
+        # Sources
+        # -----------------------------------------------------
+
         sources = []
-        if path and os.path.exists(path):
-            documentName = os.path.basename(path)
-            document = documents_collection.find_one({
-                "documentName": {
-                    "$regex": documentName,
-                    "$options": "i"
+
+        # -----------------------------------------------------
+        # Document source
+        # -----------------------------------------------------
+
+        if document:
+
+            sources.append(
+                {
+                    "type": "document",
+
+                    "documentId": str(
+                        document["_id"]
+                    ),
+
+                    "documentName": document.get(
+                        "originalName",
+                        ""
+                    ),
+
+                    "fileName": document.get(
+                        "fileName",
+                        ""
+                    ),
+
+                    "page": document.get(
+                        "page",
+                        1
+                    ),
+
+                    "text": document.get(
+                        "text",
+                        ""
+                    ),
                 }
-            })
+            )
 
-            document_id = str(document["_id"]) if document else None
-            page = document.get("page", 1) if document else 1
-            text = document.get("text", "") if document else ""
-            filename = document.get("fileName", "") if document else ""
-
-            sources.append({
-                "type": "document",
-                "documentId": document_id,
-                "documentName": documentName,
-                "fileName": filename,
-                "page": page,
-                "text": text,
-            })
+        # -----------------------------------------------------
+        # Generated image
+        # -----------------------------------------------------
 
         if os.path.exists(filename):
-            sources.append({
-                "type": "image",
-                "path": filename,
-            })
+
+            generated_image_filename = (
+                os.path.basename(filename)
+            )
+
+            print(
+                "Generated image found:",
+                filename
+            )
+
+            # Upload image to Supabase
+            upload_generated_image(
+                file_path=filename,
+                filename=generated_image_filename
+            )
+
+            print(
+                "Generated image uploaded to Supabase:",
+                generated_image_filename
+            )
+
+            # Add image as a source
+            sources.append(
+                {
+                    "type": "image",
+                    "path": generated_image_filename,
+                }
+            )
+
+        # -----------------------------------------------------
+        # LLM Context
+        # -----------------------------------------------------
 
         if return_code:
+
             llm_context = f"""
                 The requested Python code has been generated successfully.
 
                 Python Code:
 
                 ```python
-                    {code}
+                {code}
                 ```
 
                 Output:
                 {output if output else '(No text output)'}
             """
+
         else:
+
             graph_note = (
-                "The requested graph has been generated successfully and is attached below."
-                if "plt.savefig(filename)" in code
+                "The requested graph has been generated successfully "
+                "and is attached below."
+                if os.path.exists(filename)
                 else ""
             )
 
@@ -238,18 +441,42 @@ def python_tool(filters, owner_id, input=None) -> ToolResult:
                 {graph_note}
             """
 
-            print("LLM Context:", llm_context)
+        print(
+            "LLM Context:",
+            llm_context
+        )
+
+        # -----------------------------------------------------
+        # Return ToolResult
+        # -----------------------------------------------------
 
         return ToolResult(
             llm_context=llm_context,
-            sources=sources or [],
+            sources=sources
         )
 
     except Exception as e:
+
         import traceback
+
         traceback.print_exc()
 
         return ToolResult(
-            llm_context=f"Python Error:\n\n{str(e)}",
-            sources=[],
+            llm_context=(
+                f"Python Error:\n\n{str(e)}"
+            ),
+            sources=[]
         )
+
+    finally:
+
+        # -----------------------------------------------------
+        # Cleanup downloaded document
+        # -----------------------------------------------------
+
+        if temp_dir:
+
+            shutil.rmtree(
+                temp_dir,
+                ignore_errors=True
+            )

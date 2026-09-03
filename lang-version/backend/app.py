@@ -25,6 +25,8 @@ from routers.collectionRouter import router as collection_router
 from routers.documentRouter import router as document_router
 from routers.chatRouter import router as chat_router
 from routers.conversationRouter import router as conversation_router
+from routers.userRouter import router as user_router
+from routers.imageRouter import router as image_router
 
 
 app = FastAPI()
@@ -80,8 +82,26 @@ app.include_router(
     tags=["Conversations"]
 )
 
+app.include_router(
+    user_router,
+    prefix="/user",
+    tags=["User"]
+)
+
+app.include_router(
+    image_router,
+    prefix="/ai-images",
+    tags=["AI Images"]
+)
+
 @app.get("/")
 async def read_root():
     return {
         "message": "AI Research Workspace API"
+    }
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy"
     }

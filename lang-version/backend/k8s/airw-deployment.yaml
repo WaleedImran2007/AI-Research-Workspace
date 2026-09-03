@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: airw-backend-deployment
+  namespace: airw
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: airw-backend
+
+  template:
+    metadata:
+      labels:
+        app: airw-backend
+
+    spec:
+      serviceAccountName: airw-backend-serviceaccount
+
+      containers:
+        - name: airw-backend-container
+          image: waleedimran/airw-backend:v2
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          ports:
+            - containerPort: 8000
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+
+            failureThreshold: 10
+            periodSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+          volumeMounts:
+            - name: airw-storage
+              mountPath: /app/data
+
+          envFrom:
+            - secretRef:
+                name: airw-backend-secrets
+
+            - configMapRef:
+                name: airw-backend-configmap
+
+      volumes:
+        - name: airw-storage
+          persistentVolumeClaim:
+            claimName: airw-backend-pvc

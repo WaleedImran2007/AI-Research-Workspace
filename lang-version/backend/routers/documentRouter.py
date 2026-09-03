@@ -14,25 +14,44 @@ import time
 
 from services.document_processor import process_document
 from services.bm25_search import clear_bm25_cache
+from services.audio_processor import process_audio
 
 from core.supabase import supabase
 
 from fastapi import BackgroundTasks
+
+from fastapi.responses import StreamingResponse
+import io
 
 router = APIRouter()
 
 UPLOAD_FOLDER = "uploads/documents"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True) # Ensure the upload folder exists
 
-ALLOWED_FILE_TYPES = [
+ALLOWED_FILE_TYPES = {
     "application/pdf",
-    "text/csv"
-]
+    "audio/mpeg",       # mp3
+    "audio/wav",        # wav
+    "audio/x-wav",      # some browsers/clients
+    "audio/mp4",        # m4a can sometimes appear as this
+    "audio/x-m4a",
+    "audio/ogg",
+    "audio/webm",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 DOCUMENT_TYPES = {
     "application/pdf": "pdf",
     "text/csv": "csv",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+
+    "audio/mpeg": "audio",
+    "audio/wav": "audio",
+    "audio/x-wav": "audio",
+    "audio/mp4": "audio",
+    "audio/x-m4a": "audio",
+    "audio/ogg": "audio",
+    "audio/webm": "audio",
 }
 
 # Upload a document to a specific collection
@@ -43,6 +62,10 @@ async def upload_document(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
+
+    print("FILENAME:", file.filename)
+    print("CONTENT TYPE:", file.content_type)
+
     collection = collections_collection.find_one({"_id": ObjectId(collection_id), "ownerId": current_user["id"]})
 
     if not collection:
@@ -93,8 +116,8 @@ async def upload_document(
 
     if document_type == "csv":
         new_document["status"] = "ready"  # CSV files are ready immediately
-    elif document_type == "pdf":
-        new_document["status"] = "processing"  # PDFs will be processed in the background
+    elif document_type in ["pdf", "audio"]:
+        new_document["status"] = "processing"  # PDFs and audio files will be processed in the background
 
 
     result = documents_collection.insert_one(new_document)
@@ -103,14 +126,20 @@ async def upload_document(
 
     clear_bm25_cache(current_user["id"], [collection_id])
 
-    if file.content_type == "application/pdf":
+    if document_type == "pdf":
         background_tasks.add_task(
             process_document, 
             str(result.inserted_id)
         )
 
+    elif document_type == "audio":
+        background_tasks.add_task(
+            process_audio, 
+            str(result.inserted_id)
+        )
+
     return {
-        "message": f"Document uploaded successfully. { 'Processing started in the background.' if file.content_type == 'application/pdf' else 'No background processing required.' }",
+        "message": f"Document uploaded successfully. { 'Processing started in the background.' if document_type in ['pdf', 'audio'] else 'No background processing required.' }",
         "documentId": str(result.inserted_id),
     }
 
@@ -174,7 +203,7 @@ def delete_document(
     documents_collection.delete_one({"_id": object_id})
 
     # delete the knowledge chunks associated with this document
-    knowledge_chunks_collection.delete_many({"documentId": object_id})
+    knowledge_chunks_collection.delete_many({"documentId": document_id})
 
     # delete the page layouts associated with this document
     page_layouts_collection.delete_many({"documentId": document_id})
@@ -188,7 +217,7 @@ def delete_document(
     }    
 
 # Open the pdf/document in the browser
-@router.get("/{document_id}/view")
+@router.get("/{document_id}/view/pdf")
 def view_document(
     document_id: str
 ):
@@ -203,11 +232,6 @@ def view_document(
         raise HTTPException(status_code=404, detail="Document not found.")
 
     storage_path = f"documents/{document['fileName']}"
-
-    # file_path = os.path.join(UPLOAD_FOLDER, document["fileName"])
-
-    # if not os.path.exists(file_path):
-    #     raise HTTPException(status_code=404, detail="File not found on the server.")
 
     try:
         file_bytes = supabase.storage.from_("airw-documents").download(storage_path)
@@ -257,3 +281,87 @@ def get_page_layout(
         "page": page_layout["page"],
         "spans": page_layout["spans"]
     }
+
+
+@router.get("/{document_id}/view/audio")
+def view_audio(document_id: str):
+
+    # Validate document ID
+    try:
+        object_id = ObjectId(document_id)
+    except InvalidId:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid document ID format."
+        )
+
+    # Find document
+    document = documents_collection.find_one({
+        "_id": object_id
+    })
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found."
+        )
+
+    # Make sure document is audio
+    if document.get("documentType") != "audio":
+        raise HTTPException(
+            status_code=400,
+            detail="Document is not an audio file."
+        )
+
+    try:
+        # Same Supabase path used during processing
+        storage_path = f"documents/{document['fileName']}"
+
+        print("DOWNLOADING AUDIO:", storage_path)
+
+        file_bytes = supabase.storage \
+            .from_("airw-documents") \
+            .download(storage_path)
+
+        print("AUDIO LOADED:", len(file_bytes), "bytes")
+
+        # Determine MIME type
+        extension = os.path.splitext(
+            document["fileName"]
+        )[1].lower()
+
+        mime_types = {
+            ".ogg": "audio/ogg",
+            ".mp3": "audio/mpeg",
+            ".wav": "audio/wav",
+            ".m4a": "audio/mp4",
+            ".webm": "audio/webm",
+        }
+
+        mime_type = mime_types.get(
+            extension,
+            "application/octet-stream"
+        )
+
+        return StreamingResponse(
+            io.BytesIO(file_bytes),
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": (
+                    f'inline; filename="{document["originalName"]}"'
+                )
+            }
+        )
+
+    except Exception as e:
+
+        print(
+            f"Error loading audio document "
+            f"{document_id}: {e}"
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to load audio file."
+        )
+    

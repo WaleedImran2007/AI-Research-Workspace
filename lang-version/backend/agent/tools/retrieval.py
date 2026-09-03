@@ -22,8 +22,10 @@ def retrieval(filters, owner_id, input = None) -> ToolResult:
         llm_context += doc.page_content + "\n\n"
 
         source_key = (
-            chunk["documentId"], 
-            chunk.get("page")
+            chunk["documentId"],
+            chunk.get("documentType"),
+            chunk.get("page"),
+            chunk.get("chunkIndex")
         )
 
         if source_key not in seen_sources:
@@ -34,7 +36,9 @@ def retrieval(filters, owner_id, input = None) -> ToolResult:
                 "documentId": chunk["documentId"],
                 "documentName": chunk.get("documentName", "Unknown Document"),
                 "fileName": chunk.get("fileName", "Unknown File"),
+                "documentType": chunk.get("documentType"),
                 "page": chunk.get("page"),
+                "startTime": chunk.get("startTime"),
                 "text": doc.page_content
             })
 

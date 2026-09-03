@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+
+metadata:
+  name: airw-backend-pod
+  namespace: airw
+  labels:
+    app: airw-backend
+
+spec:
+  containers:
+    - name: airw-backend-container
+      image: waleedimran/airw-backend:latest
+
+      ports:
+        - containerPort: 8000
+      
+      envFrom:
+        - secretRef:
+            name: airw-backend-secrets

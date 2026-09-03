@@ -25,14 +25,19 @@ RELATIVE_THRESHOLD = 0.20
 # Maximum number of chunks passed to the LLM
 MAX_CHUNKS = 10
 
-# Number of simultaneous HF requests
-MAX_WORKERS = 8
+# Number of documents sent to HF in one request
+BATCH_SIZE = 10
 
-# HF request timeout
-REQUEST_TIMEOUT = 20
+# Request timeout
+REQUEST_TIMEOUT = 30
 
 # Number of retries
 MAX_RETRIES = 3
+
+# Delay before retry
+RETRY_BASE_DELAY = 2
+
+MAX_WORKERS = 5
 
 
 class HFAPIReranker(BaseDocumentCompressor):

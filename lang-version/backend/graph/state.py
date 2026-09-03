@@ -15,6 +15,13 @@ class AgentState(TypedDict):
     owner_id: str
     collection_ids: list[str] | None
 
+    # Image Information
+    image: dict | None
+    image_bytes: bytes | None
+    image_content_type: str | None
+
+    web_enabled: bool
+
     search_query: str
 
     intent: Intent | None
